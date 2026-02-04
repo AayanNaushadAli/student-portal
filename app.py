@@ -13,10 +13,17 @@ with st.sidebar:
         if st.button("Start Studying"):
             if email:
                 user = login_user(email)
-                st.session_state["user"] = user
-                st.rerun()
+                if user:
+                    st.session_state["user"] = user
+                    st.rerun()
+                else:
+                    st.error("❌ Login failed: Connection to database failed. Please try again later.")
     else:
-        user = st.session_state["user"]
+        user = st.session_state.get("user")
+        if not user:
+            del st.session_state["user"]
+            st.rerun()
+            
         st.write(f"👤 **{user['full_name']}**")
         st.write(f"🔥 XP: {user['xp']}")
         if st.button("Logout"):
