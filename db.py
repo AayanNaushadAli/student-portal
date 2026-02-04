@@ -3,13 +3,22 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 import json
+import streamlit as st
 
+# 1. Load keys (Try local .env first)
 load_dotenv()
 
 def get_db_connection():
     try:
-        # 1. First, check if we have a Cloud Link (Supabase)
+        # 1. First, check if we have a Cloud Link (Supabase) from .env
         database_url = os.getenv("DATABASE_URL")
+        
+        # 2. If that failed, try Streamlit Cloud Secrets
+        if not database_url:
+            try:
+                database_url = st.secrets["DATABASE_URL"]
+            except:
+                pass
         
         if database_url:
             return psycopg2.connect(database_url)
