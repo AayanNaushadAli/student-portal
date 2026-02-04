@@ -110,12 +110,10 @@ if "user" in st.session_state:
                         
                         # A. Read PDF
                         st.write("📖 Reading file...")
-                        # Save temp file safely
-                        temp_path = f"temp_{uploaded_file.name}"
-                        with open(temp_path, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
                         
-                        raw_text = extract_text_from_pdf(temp_path)
+                        # Fix: Pass the stream directly to pypdf (via utils.py)
+                        # No need to save temp files!
+                        raw_text = extract_text_from_pdf(uploaded_file)
                         
                         # B. Generate Hash (Unique ID)
                         file_hash = hashlib.md5(raw_text.encode()).hexdigest()
