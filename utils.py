@@ -1,15 +1,27 @@
 import os
 import requests
 import json
+import streamlit as st
 from pypdf import PdfReader
 from dotenv import load_dotenv
 
-# 1. Load keys
+# 1. Load keys (Try local .env first)
 load_dotenv()
+
+# 2. Smart Key Retrieval
+# Try to get it from the OS (Local .env)
 api_key = os.getenv("GEMINI_API_KEY")
 
+# If that failed, try to get it from Streamlit Cloud Secrets
 if not api_key:
-    raise ValueError("❌ Missing GEMINI_API_KEY in .env file!")
+    try:
+        api_key = st.secrets["GEMINI_API_KEY"]
+    except:
+        pass
+
+# If BOTH fail, then crash
+if not api_key:
+    raise ValueError("❌ Missing GEMINI_API_KEY! Check your .env (Local) or Streamlit Secrets (Cloud).")
 
 def extract_text_from_pdf(pdf_path):
     try:
@@ -23,8 +35,6 @@ def extract_text_from_pdf(pdf_path):
         return None
 
 def ask_gemini(prompt):
-    # We use the raw REST API. This bypasses the buggy SDK.
-    # We are using 'gemini-flash-latest' which appeared in your available list.
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
     
     headers = {
@@ -35,28 +45,21 @@ def ask_gemini(prompt):
         "contents": [{
             "parts": [{"text": prompt}]
         }],
-        # ADD THIS BLOCK to allow long responses
         "generationConfig": {
-            "maxOutputTokens": 8192,  # Huge limit so it doesn't cut off
-            "temperature": 0.3        # Lower temp = More analytical/precise, less creative
+            "maxOutputTokens": 8192,
+            "temperature": 0.3
         }
     }
 
     try:
+        # We generally don't need verify=False on the cloud, but you can add it if needed.
         response = requests.post(url, headers=headers, data=json.dumps(data))
         
         if response.status_code == 200:
             result = response.json()
-            # Dig through the JSON to find the text answer
             return result['candidates'][0]['content']['parts'][0]['text']
         else:
             return f"❌ Server Error {response.status_code}: {response.text}"
             
     except Exception as e:
         return f"❌ Connection Error: {e}"
-
-# --- TEST AREA ---
-if __name__ == "__main__":
-    print("🤖 Testing Direct Connection (No SDK)...")
-    reply = ask_gemini("Are you online?")
-    print(f"\n💬 Gemini says: {reply}")
