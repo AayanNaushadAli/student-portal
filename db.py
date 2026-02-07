@@ -121,3 +121,25 @@ def get_leaderboard():
     conn.close()
     return leaders
 
+def get_file_content(file_hash):
+    """Fetch the raw text content of a file for the Chatbot"""
+    conn = get_db_connection()
+    if not conn: return None
+    
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT syllabus_data FROM master_files WHERE file_hash = %s", (file_hash,))
+        result = cur.fetchone()
+        
+    conn.close()
+    
+    if result and result['syllabus_data']:
+        # The text is stored inside a JSON object: {"content": "..."}
+        data = result['syllabus_data']
+        # Handle cases where it might be a string or a dict depending on how it was saved
+        if isinstance(data, str):
+            import json
+            data = json.loads(data)
+        return data.get("content", "")
+    return None
+
+    

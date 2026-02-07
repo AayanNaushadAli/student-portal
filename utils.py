@@ -63,3 +63,26 @@ def ask_gemini(prompt):
             
     except Exception as e:
         return f"❌ Connection Error: {e}"
+
+def ask_gemini_chat(question, pdf_context):
+    """
+    Sends a specific question + the PDF text to Gemini.
+    """
+    prompt = f"""
+    You are an expert tutor. I am a student asking questions about this exam paper.
+    
+    DOCUMENT CONTEXT:
+    {pdf_context}
+    
+    ----------------
+    STUDENT QUESTION: {question}
+    
+    INSTRUCTIONS:
+    - Answer the question clearly and concisely.
+    - If the answer is found in the document, cite the question number (e.g., "As seen in Q3...").
+    - If the answer is NOT in the document, use your general knowledge but mention that it wasn't in the paper.
+    - Keep it encouraging and helpful.
+    """
+    
+    # Reuse your existing ask_gemini logic, just with this new prompt
+    return ask_gemini(prompt)

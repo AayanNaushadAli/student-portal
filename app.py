@@ -1,9 +1,72 @@
 import streamlit as st
 import hashlib
-from db import login_user, save_file_record, get_all_files, update_ai_analysis, get_leaderboard, get_db_connection
-from utils import extract_text_from_pdf, ask_gemini
+from db import login_user, save_file_record, get_all_files, update_ai_analysis, get_leaderboard, get_db_connection, get_file_content
+from utils import extract_text_from_pdf, ask_gemini, ask_gemini_chat
 
 st.set_page_config(page_title="Student Portal", layout="wide")
+
+def apply_custom_css():
+    st.markdown("""
+        <style>
+            /* 1. Main Background & Font */
+            .stApp {
+                background-color: #0E1117;
+                font-family: 'Segoe UI', sans-serif;
+            }
+            
+            /* 2. Sidebar styling */
+            [data-testid="stSidebar"] {
+                background-color: #161B22;
+                border-right: 1px solid #30363D;
+            }
+            
+            /* 3. Cards for the Files */
+            div.stButton > button {
+                width: 100%;
+                border-radius: 8px;
+                border: 1px solid #30363D;
+                background-color: #21262D;
+                color: #C9D1D9;
+                transition: all 0.3s;
+            }
+            div.stButton > button:hover {
+                background-color: #30363D;
+                border-color: #8B949E;
+                color: #FFFFFF;
+            }
+            
+            /* 4. Chat Message Bubbles */
+            .stChatMessage {
+                background-color: #161B22;
+                border: 1px solid #30363D;
+                border-radius: 10px;
+                padding: 10px;
+            }
+            
+            /* 5. Headers */
+            h1, h2, h3 {
+                color: #58A6FF !important;
+            }
+            
+            /* 6. Tabs */
+            .stTabs [data-baseweb="tab-list"] {
+                gap: 10px;
+            }
+            .stTabs [data-baseweb="tab"] {
+                background-color: #161B22;
+                border-radius: 5px;
+                padding: 10px 20px;
+                border: 1px solid #30363D;
+            }
+            .stTabs [aria-selected="true"] {
+                background-color: #238636 !important;
+                color: white !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+# CALL THE FUNCTION IMMEDIATELY
+apply_custom_css()
 
 # --- SIDEBAR: LOGIN ---
 with st.sidebar:
@@ -48,56 +111,48 @@ with st.sidebar:
 if "user" in st.session_state:
     st.title("📚 My Study Dashboard")
     
-    tab1, tab2 = st.tabs(["📂 My Notes", "🚀 AI Generator"])
+    tab1, tab2, tab3 = st.tabs(["📂 My Notes", "🚀 AI Generator", "💬 Chat Assistant"])
 
     # TAB 1: VIEW NOTES
     # TAB 1: VIEW NOTES
     # TAB 1: VIEW NOTES
     with tab1:
-        st.subheader("My Analyzed Papers")
+        st.header("📚 My Study Dashboard")
+        
+        # Define files here!
         files = get_all_files()
         
+        # Grid Layout for stats
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="Total Papers", value=len(files))
+        with col2:
+            st.metric(label="Total XP", value=st.session_state["user"]['xp'])
+        with col3:
+            st.metric(label="Global Rank", value="#5") # Placeholder for now
+
+        st.divider()
+        st.subheader("Your Library")
+
         if not files:
-            st.info("No papers analyzed yet. Go to the 'AI Generator' tab!")
-            
-        for f in files:
-            # Show the file name
-            with st.expander(f"📄 {f['file_name']} (Uploaded: {f['created_at']})"):
-                
-                # Check if analysis exists
-                if f.get('ai_analysis'):
-                    st.markdown("### 🧠 AI Strategy Report")
-                    st.write(f['ai_analysis'])
+            st.info("📂 No files uploaded yet. Go to the 'AI Generator' tab to start!")
+        else:
+            # Display files in a nice grid instead of a list
+            for file in files:
+                with st.container():
+                    # Create a "Card" look using columns
+                    c1, c2, c3 = st.columns([0.1, 0.7, 0.2])
                     
-                    st.markdown("---")
+                    with c1:
+                        st.markdown("📄") # Icon
+                    with c2:
+                        st.markdown(f"**{file['file_name']}**")
+                        st.caption(f"Uploaded: {file['created_at'].strftime('%Y-%m-%d')}")
+                    with c3:
+                        if st.button("Open", key=f"btn_{file['file_hash']}"):
+                            st.toast(f"Opening {file['file_name']}...")
                     
-                    # --- THE REAL XP BUTTON ---
-                    # We use a unique key for every button so Streamlit doesn't get confused
-                    btn_key = f"btn_{f['file_hash']}"
-                    
-                    if st.button(f"🏆 Mark as Mastered (+100 XP)", key=btn_key):
-                        # 1. Update Database (The Real Bank Transaction)
-                        conn = get_db_connection()
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                "UPDATE users SET xp = xp + 100 WHERE email = %s",
-                                (st.session_state["user"]["email"],)
-                            )
-                            conn.commit()
-                        conn.close()
-                        
-                        # 2. Update the "Live" Session (So you see it instantly)
-                        st.session_state["user"]["xp"] += 100
-                        
-                        # 3. Success Message & Rerun
-                        st.toast(f"Boom! XP Added. Total: {st.session_state['user']['xp']}")
-                        st.balloons()
-                        
-                        # Rerun to update the Leaderboard immediately
-                        st.rerun()
-                        
-                else:
-                    st.warning("Analysis pending or failed.")
+                    st.divider() # Thin line between items
     # TAB 2: UPLOAD & GENERATE
     # TAB 2: UPLOAD & GENERATE
     with tab2:
@@ -163,5 +218,55 @@ if "user" in st.session_state:
 
                 st.balloons()
                 st.success("All files processed! Check 'My Notes' tab to view them.")
+    # TAB 3: CHAT ASSISTANT
+    with tab3:
+        st.header("💬 Chat with a Paper")
+        
+        # 1. Select a File
+        files = get_all_files()
+        file_options = {f['file_name']: f['file_hash'] for f in files}
+        
+        selected_file_name = st.selectbox("Choose a paper to discuss:", list(file_options.keys()))
+        
+        if selected_file_name:
+            selected_hash = file_options[selected_file_name]
+            
+            # Initialize Chat History
+            if "messages" not in st.session_state:
+                st.session_state.messages = []
+            
+            # --- CRITICAL FIX: DISPLAY MESSAGES FIRST ---
+            # Create a container specifically for the chat history
+            chat_container = st.container()
+            
+            with chat_container:
+                for message in st.session_state.messages:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["content"])
+            
+            # --- INPUT BOX COMES LAST ---
+            # This ensures it stays at the bottom or below the messages
+            if prompt := st.chat_input(f"Ask about {selected_file_name}..."):
+                
+                # 1. Show User Message immediately
+                with chat_container: # Write to the container we created above
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
+                
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                
+                # 2. Get AI Response
+                with chat_container: # Write to the container
+                    with st.chat_message("assistant"):
+                        with st.spinner("Thinking..."):
+                            pdf_text = get_file_content(selected_hash)
+                            
+                            if pdf_text:
+                                response = ask_gemini_chat(prompt, pdf_text)
+                                st.markdown(response)
+                                st.session_state.messages.append({"role": "assistant", "content": response})
+                            else:
+                                st.error("Could not read file content.")
+
 else:
     st.info("👈 Please log in from the sidebar to continue.")
