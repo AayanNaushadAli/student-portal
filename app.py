@@ -98,18 +98,22 @@ with st.sidebar:
             st.rerun()
     # ... existing sidebar code ...
     
+    # 👇 ADD THIS "DEV TOOLS" SECTION AT THE BOTTOM
     st.markdown("---")
-    st.subheader("🏆 Hall of Fame")
-    
-    # Import the function first! (from db import get_leaderboard)
-    leaders = get_leaderboard()
-    
-    if leaders:
-        for i, student in enumerate(leaders):
-            # i+1 is the rank (1st, 2nd, 3rd...)
-            st.write(f"**{i+1}. {student['full_name']}** — {student['xp']} XP")
-    else:
-        st.write("No competitors yet!")
+    st.subheader("🛠️ Dev Tools")
+    if st.button("🗑️ Wipe All Files (Reset DB)"):
+        conn = get_db_connection()
+        if conn:
+            with conn.cursor() as cur:
+                cur.execute("TRUNCATE TABLE master_files CASCADE;")
+                # Also truncate document_sections if it exists
+                cur.execute("TRUNCATE TABLE document_sections CASCADE;")
+                conn.commit()
+            conn.close()
+            st.success("Database Wiped! Please refresh.")
+            st.rerun()
+        else:
+            st.error("Failed to connect to database.")
 
 # --- DIALOGS ---
 @st.dialog("📄 Note Analysis", width="large")

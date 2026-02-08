@@ -36,11 +36,11 @@ def extract_text_from_pdf(pdf_path):
 
 def generate_embedding(text):
     """Generates a 3072-dimension vector embedding using Gemini"""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={api_key}"
     
     headers = {'Content-Type': 'application/json'}
     data = {
-        "model": "models/text-embedding-004",
+        "model": "models/gemini-embedding-001",
         "content": {"parts": [{"text": text}]}
     }
 

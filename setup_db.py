@@ -19,6 +19,9 @@ create table document_sections (
 
 create index if not exists idx_doc_sections_file_hash on document_sections (file_hash);
 
+-- Drop existing function to avoid ambiguity if parameters changed
+drop function if exists match_document_sections(vector, float, int, text);
+
 create or replace function match_document_sections (
   query_embedding vector(3072),
   match_threshold float,

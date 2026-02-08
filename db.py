@@ -166,9 +166,9 @@ def match_document_sections(file_hash, query_embedding, match_threshold=0.3, mat
     if not conn: return []
     
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        # Calling the RPC function we created in Supabase
+        # Calling the RPC function with explicit type casts to avoid AmbiguousFunction error
         cur.execute(
-            "SELECT content, similarity FROM match_document_sections(%s, %s, %s, %s)",
+            "SELECT content, similarity FROM match_document_sections(%s::vector(3072), %s::float, %s::int, %s::text)",
             (query_embedding, match_threshold, match_count, file_hash)
         )
         results = cur.fetchall()
