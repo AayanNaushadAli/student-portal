@@ -1,5 +1,5 @@
-psycopg2-binary
-python-dotenv
-google-generativeai
 streamlit
-pypdf
+google-generative-ai
+python-dotenv
+psycopg2-binary
+requests
