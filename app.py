@@ -1,7 +1,11 @@
 import streamlit as st
 import hashlib
-from db import login_user, save_file_record, get_all_files, update_ai_analysis, get_leaderboard, get_db_connection, get_file_content
-from utils import extract_text_from_pdf, ask_gemini, ask_gemini_chat
+from db import (
+    login_user, save_file_record, get_all_files, update_ai_analysis, 
+    get_leaderboard, get_db_connection, get_file_content,
+    save_document_sections, match_document_sections
+)
+from utils import extract_text_from_pdf, ask_gemini, ask_gemini_chat, generate_embedding
 
 st.set_page_config(page_title="Student Portal", layout="wide")
 
@@ -107,6 +111,14 @@ with st.sidebar:
     else:
         st.write("No competitors yet!")
 
+# --- DIALOGS ---
+@st.dialog("📄 Note Analysis", width="large")
+def show_analysis(file_name, analysis):
+    st.markdown(f"### {file_name}")
+    st.markdown(analysis)
+    if st.button("Close"):
+        st.rerun()
+
 # --- MAIN APP ---
 if "user" in st.session_state:
     st.title("📚 My Study Dashboard")
@@ -150,7 +162,10 @@ if "user" in st.session_state:
                         st.caption(f"Uploaded: {file['created_at'].strftime('%Y-%m-%d')}")
                     with c3:
                         if st.button("Open", key=f"btn_{file['file_hash']}"):
-                            st.toast(f"Opening {file['file_name']}...")
+                            if file.get('ai_analysis'):
+                                show_analysis(file['file_name'], file['ai_analysis'])
+                            else:
+                                st.warning("Analysis not yet generated for this file.")
                     
                     st.divider() # Thin line between items
     # TAB 2: UPLOAD & GENERATE
@@ -207,10 +222,24 @@ if "user" in st.session_state:
                         
                         ai_response = ask_gemini(prompt)
                         
-                        # E. Save AI Output to DB (NEW STEP)
+                        # E. Save AI Output to DB
                         update_ai_analysis(file_hash, ai_response)
                         
-                        st.success("Analysis Saved!")
+                        # F. CHUNKING & EMBEDDINGS (NEW: RAG Preparation)
+                        st.write("🧠 Indexing for Chat...")
+                        # Simple chunking: split by paragraphs or every 1000 chars
+                        chunks = [raw_text[i:i+1000] for i in range(0, len(raw_text), 1000)]
+                        
+                        sections_to_save = []
+                        for chunk in chunks:
+                            vector = generate_embedding(chunk)
+                            if vector:
+                                sections_to_save.append((chunk, vector))
+                        
+                        if sections_to_save:
+                            save_document_sections(file_hash, sections_to_save)
+                        
+                        st.success("Analysis Saved & Indexed!")
                         status.update(label=f"✅ {uploaded_file.name} Complete!", state="complete", expanded=False)
                     
                     # Update progress bar
@@ -258,15 +287,23 @@ if "user" in st.session_state:
                 # 2. Get AI Response
                 with chat_container: # Write to the container
                     with st.chat_message("assistant"):
-                        with st.spinner("Thinking..."):
-                            pdf_text = get_file_content(selected_hash)
+                        with st.spinner("Searching document..."):
+                            # 1. Generate embedding for the question
+                            query_vector = generate_embedding(prompt)
                             
-                            if pdf_text:
-                                response = ask_gemini_chat(prompt, pdf_text)
-                                st.markdown(response)
-                                st.session_state.messages.append({"role": "assistant", "content": response})
+                            if query_vector:
+                                # 2. Find relevant chunks
+                                relevant_chunks = match_document_sections(selected_hash, query_vector)
+                                
+                                if relevant_chunks:
+                                    # 3. Ask Gemini with context
+                                    response = ask_gemini_chat(prompt, relevant_chunks)
+                                    st.markdown(response)
+                                    st.session_state.messages.append({"role": "assistant", "content": response})
+                                else:
+                                    st.error("I couldn't find any relevant sections in the paper.")
                             else:
-                                st.error("Could not read file content.")
+                                st.error("Failed to generate embedding for your question.")
 
 else:
     st.info("👈 Please log in from the sidebar to continue.")

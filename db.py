@@ -142,4 +142,37 @@ def get_file_content(file_hash):
         return data.get("content", "")
     return None
 
+def save_document_sections(file_hash, sections):
+    """Saves chunks and their embeddings to the document_sections table"""
+    conn = get_db_connection()
+    if not conn: return False
+    
+    with conn.cursor() as cur:
+        # Clear existing sections for this hash to avoid duplicates if re-indexed
+        cur.execute("DELETE FROM document_sections WHERE file_hash = %s", (file_hash,))
+        
+        for content, embedding in sections:
+            cur.execute(
+                "INSERT INTO document_sections (file_hash, content, embedding) VALUES (%s, %s, %s)",
+                (file_hash, content, embedding)
+            )
+        conn.commit()
+    conn.close()
+    return True
+
+def match_document_sections(file_hash, query_embedding, match_threshold=0.3, match_count=5):
+    """Performs vector search using the match_document_sections RPC function"""
+    conn = get_db_connection()
+    if not conn: return []
+    
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        # Calling the RPC function we created in Supabase
+        cur.execute(
+            "SELECT content, similarity FROM match_document_sections(%s, %s, %s, %s)",
+            (query_embedding, match_threshold, match_count, file_hash)
+        )
+        results = cur.fetchall()
+    conn.close()
+    return [r['content'] for r in results]
+
     

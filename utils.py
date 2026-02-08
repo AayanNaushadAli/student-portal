@@ -34,6 +34,27 @@ def extract_text_from_pdf(pdf_path):
         print(f"❌ Error reading PDF: {e}")
         return None
 
+def generate_embedding(text):
+    """Generates a 3072-dimension vector embedding using Gemini"""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={api_key}"
+    
+    headers = {'Content-Type': 'application/json'}
+    data = {
+        "model": "models/text-embedding-004",
+        "content": {"parts": [{"text": text}]}
+    }
+
+    try:
+        response = requests.post(url, headers=headers, data=json.dumps(data))
+        if response.status_code == 200:
+            return response.json()['embedding']['values']
+        else:
+            print(f"❌ Embedding API Error {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        print(f"❌ Connection Error: {e}")
+        return None
+
 def ask_gemini(prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
     
@@ -64,25 +85,25 @@ def ask_gemini(prompt):
     except Exception as e:
         return f"❌ Connection Error: {e}"
 
-def ask_gemini_chat(question, pdf_context):
+def ask_gemini_chat(question, context_chunks):
     """
-    Sends a specific question + the PDF text to Gemini.
+    Sends a specific question + retrieved document segments to Gemini.
     """
-    prompt = f"""
-    You are an expert tutor. I am a student asking questions about this exam paper.
+    context_text = "\n\n".join(context_chunks)
     
-    DOCUMENT CONTEXT:
-    {pdf_context}
+    prompt = f"""
+    You are an expert tutor. I am a student asking questions about an exam paper.
+    
+    CONTEXT FROM THE DOCUMENT:
+    {context_text}
     
     ----------------
     STUDENT QUESTION: {question}
     
     INSTRUCTIONS:
-    - Answer the question clearly and concisely.
-    - If the answer is found in the document, cite the question number (e.g., "As seen in Q3...").
-    - If the answer is NOT in the document, use your general knowledge but mention that it wasn't in the paper.
-    - Keep it encouraging and helpful.
+    - Use the provided context to answer the question.
+    - If the answer is not in the context, use your general knowledge but clarify that it wasn't explicitly in the paper.
+    - Be concise, encouraging, and helpful.
     """
     
-    # Reuse your existing ask_gemini logic, just with this new prompt
     return ask_gemini(prompt)
